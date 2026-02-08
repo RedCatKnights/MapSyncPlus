@@ -16,6 +16,7 @@ import org.bukkit.map.MapRenderer;
 import org.bukkit.map.MapView;
 import org.bukkit.persistence.PersistentDataType;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Objects;
 import java.util.Optional;
@@ -87,8 +88,6 @@ public class MapUtils {
 
         MapMeta mapMeta = (MapMeta) item.getItemMeta();
 
-        //if(mapMeta.getMapView() == null) return;
-
         if(hasUUID(mapMeta)){
 
             itemFrame.ifPresent(frame -> frame.setFixed(true));
@@ -104,13 +103,11 @@ public class MapUtils {
                             plugin.getMapDataManager().getMapMap().remove(uuid);
                             renderMap(item, itemFrame);
                         }
-                        //plugin.getLogger().log(Level.INFO, "Loaded map from local storage.");
                         ItemStack rendered = render(item, bytes).clone();
                         itemFrame.ifPresent(frame -> Bukkit.getScheduler().runTaskLater(plugin, () -> {
                             frame.setItem(rendered);
                             frame.setFixed(false);
                         }, 5L));
-                        //setMapPixels(bytes, mapMeta.getMapView());
                     } catch (Exception exception) {
                         exception.printStackTrace();
                         itemFrame.ifPresent(frame -> frame.setFixed(false));
@@ -124,13 +121,11 @@ public class MapUtils {
                 item.setItemMeta(mapMeta);
                 plugin.getDatabaseManager().fetchMapData(uuid, rawid, (bytes) -> Bukkit.getScheduler().runTask(plugin, () -> {
                     try {
-                        //plugin.getLogger().log(Level.INFO, "Downloaded map from database.");
                         ItemStack rendered = render(item, bytes).clone();
                         itemFrame.ifPresent(frame -> Bukkit.getScheduler().runTaskLater(plugin, () -> {
                             frame.setItem(rendered);
                             frame.setFixed(false);
                         }, 5L));
-                        //setMapPixels(bytes, mapMeta.getMapView());
                     } catch (Exception exception) {
                         exception.printStackTrace();
                         itemFrame.ifPresent(frame -> frame.setFixed(false));
@@ -142,19 +137,55 @@ public class MapUtils {
         }
     }
 
-    public static byte[] getMapPixels(MapView view) throws Exception{
+    public static byte[] getMapPixels(MapView view) throws Exception {
         String s = "map_" + view.getId();
         Object craftworld = getCBTClass().cast(Bukkit.getServer().getWorlds().get(0));
         Object world = craftworld.getClass().getMethod("getHandle").invoke(craftworld);
         Object worldmap;
+
         if(plugin.needMapId){
             Class<?> MapIdClass = Class.forName("net.minecraft.world.level.saveddata.maps.MapId");
             Object mapId = MapIdClass.getConstructor(int.class).newInstance(view.getId());
             worldmap = world.getClass().getDeclaredMethod(plugin.getMapFunctionName, MapIdClass).invoke(world, mapId);
-        }else{
+        } else {
             worldmap = world.getClass().getDeclaredMethod(plugin.getMapFunctionName, String.class).invoke(world, s);
         }
-        return (byte[]) worldmap.getClass().getDeclaredField(plugin.colors_field).get(worldmap);
+
+        if (worldmap == null) {
+            throw new IllegalStateException("WorldMap object is null for ID: " + view.getId());
+        }
+
+        // --- フィールド名に依存せず、WorldMap内をスキャンして16384バイトの配列を探す ---
+        for (Field field : worldmap.getClass().getDeclaredFields()) {
+            // Java標準パッケージ(java.lang.Byte等)へのアクセスによるエラーを回避
+            if (field.getType().isPrimitive()) continue;
+
+            field.setAccessible(true);
+            Object potentialObj = field.get(worldmap);
+            if (potentialObj == null) continue;
+
+            // 1. 直接 byte[] が見つかった場合
+            if (potentialObj instanceof byte[]) {
+                byte[] pixels = (byte[]) potentialObj;
+                if (pixels.length == 16384) return pixels;
+            }
+
+            // 2. MapContentsなどのコンテナオブジェクト内を探索
+            String className = potentialObj.getClass().getName();
+            if (!className.startsWith("java.") && !className.startsWith("sun.")) {
+                for (Field subField : potentialObj.getClass().getDeclaredFields()) {
+                    if (subField.getType().equals(byte[].class)) {
+                        subField.setAccessible(true);
+                        byte[] pixels = (byte[]) subField.get(potentialObj);
+                        if (pixels != null && pixels.length == 16384) {
+                            return pixels;
+                        }
+                    }
+                }
+            }
+        }
+
+        throw new IllegalStateException("Could not find 16384-byte pixel array in WorldMap structure.");
     }
 
     private static Class<?> getCBTClass() throws ClassNotFoundException {
@@ -179,7 +210,6 @@ public class MapUtils {
         MapMeta meta = (MapMeta) item.getItemMeta();
 
         if(meta.getPersistentDataContainer().has(server, PersistentDataType.STRING)){
-
             if(plugin.getServername().equals(meta.getPersistentDataContainer().get(server, PersistentDataType.STRING))){
                 if(meta.getPersistentDataContainer().has(rawid, PersistentDataType.INTEGER)){
                     meta.setMapId(meta.getPersistentDataContainer().get(rawid, PersistentDataType.INTEGER));
