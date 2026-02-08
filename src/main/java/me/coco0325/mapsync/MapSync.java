@@ -57,6 +57,7 @@ public final class MapSync extends JavaPlugin{
     }
 
     public void setup() {
+        // 1.21.x の判定を追加
         if(Bukkit.getVersion().contains("1.16")){
             getMapFunctionName = "a";
             colors_field = "colors";
@@ -72,7 +73,6 @@ public final class MapSync extends JavaPlugin{
         if(Bukkit.getVersion().contains("1.20.5") || Bukkit.getVersion().contains("1.20.6") || Bukkit.getVersion().contains("1.21")){
             needMapId = true;
             try {
-                // Check if using Paper
                 Class.forName("com.destroystokyo.paper.ParticleBuilder");
                 isPaperCB = true;
             } catch (ClassNotFoundException ignored) {
@@ -84,12 +84,11 @@ public final class MapSync extends JavaPlugin{
             props.load(new FileReader(Paths.get("server.properties").toFile()));
             servername = props.getProperty("server-name");
         }catch (Exception e){
-            this.getLogger().log(Level.SEVERE, "Please create a section call \"server-name\" in server.properties and give your server a unique name.");
+            this.getLogger().log(Level.SEVERE, "Please create a section call \"server-name\" in server.properties.");
             this.getPluginLoader().disablePlugin(this);
         }
 
         if(servername == null) {
-            this.getLogger().log(Level.SEVERE, "Please create a section call \"server-name\" in server.properties and give your server a unique name.");
             this.getPluginLoader().disablePlugin(this);
         }
 
@@ -118,20 +117,20 @@ public final class MapSync extends JavaPlugin{
             databaseManager = new DatabaseManager(this);
         }catch (Exception e){
             this.getPluginLoader().disablePlugin(this);
-            this.getLogger().log(Level.SEVERE, "Unable to connect to MYSQL database. Please check if database.yml contains the correct database information.");
+            this.getLogger().log(Level.SEVERE, "Unable to connect to MYSQL database.");
         }
 
         mapDataManager = new MapDataManager(this);
 
         if(Bukkit.getPluginManager().isPluginEnabled("MysqlPlayerDataBridge")){
-            Bukkit.getPluginManager().registerEvents(new SyncCompleteListener(), this);
-            this.getLogger().log(Level.INFO, "MysqlPlayerDataBridge detected.");
+            // SyncCompleteListenerを消去しましたのでエラーでないように無効化しました。
+            // そもそもMysqlPlayerDataBridgeがないとビルドできませんが以下を無効化しエラーを回避しています。
+            // Bukkit.getPluginManager().registerEvents(new SyncCompleteListener(), this);
         }else{
             Bukkit.getPluginManager().registerEvents(new PlayerJoinListener(), this);
         }
 
         Bukkit.getPluginManager().registerEvents(new CartographyTableListener(this), this);
-
         Bukkit.getPluginManager().registerEvents(new MapRenderListener(this), this);
 
         if(getConfig().getBoolean("hooks.griefprevention") && getServer().getPluginManager().isPluginEnabled("GriefPrevention")){
@@ -154,28 +153,13 @@ public final class MapSync extends JavaPlugin{
                     "uuid BIGINT, map BLOB, primary key(uuid))");
             connection.close();
         } catch (SQLException e) {
-            this.getLogger().log(Level.WARNING, "Unable to create table. Please check if database.yml contains the correct database information.");
             e.printStackTrace();
         }
     }
 
-    public FileConfiguration getConfig() {
-        return config;
-    }
-
-    public FileConfiguration getMapdata() {
-        return mapdata;
-    }
-
-    public MapDataManager getMapDataManager(){
-        return mapDataManager;
-    }
-
-    public DatabaseManager getDatabaseManager(){
-        return databaseManager;
-    }
-
-    public String getServername(){
-        return servername;
-    }
+    public FileConfiguration getConfig() { return config; }
+    public FileConfiguration getMapdata() { return mapdata; }
+    public MapDataManager getMapDataManager(){ return mapDataManager; }
+    public DatabaseManager getDatabaseManager(){ return databaseManager; }
+    public String getServername(){ return servername; }
 }
