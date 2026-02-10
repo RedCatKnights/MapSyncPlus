@@ -122,10 +122,11 @@ public final class MapSync extends JavaPlugin{
 
         mapDataManager = new MapDataManager(this);
 
-        if(Bukkit.getPluginManager().isPluginEnabled("MysqlPlayerDataBridge")){
-            // SyncCompleteListenerを消去しましたのでエラーでないように無効化しました。
-            // そもそもMysqlPlayerDataBridgeがないとビルドできませんが以下を無効化しエラーを回避しています。
-            // Bukkit.getPluginManager().registerEvents(new SyncCompleteListener(), this);
+        if(Bukkit.getPluginManager().isPluginEnabled("SQL-Sync")){
+            // SyncCompleteListenerを消去しましたのでエラーでないようにPlayerJoinListenerに変更しました。
+            // そもそもMysqlPlayerDataBridgeがないとビルドできませんが以下をPlayerJoinListenerに変更してエラーにならないようにしました。
+            // 将来的にPlayerJoinListenerのないのイベントをMySQL-Syncのイベントに変更します。
+            Bukkit.getPluginManager().registerEvents(new PlayerJoinListener(), this);
         }else{
             Bukkit.getPluginManager().registerEvents(new PlayerJoinListener(), this);
         }
